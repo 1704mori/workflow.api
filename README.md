@@ -1,8 +1,2 @@
-```
-npm install
-npm run dev
-```
-
-```
-open http://localhost:3000
-```
+## Todo
+- [ ] Implement other builtin node dynamic parameter logic like http response and request
