@@ -67,3 +67,13 @@ export type NodeProcessor = {
     context: ExecutionContext
   ) => Promise<Record<string, any>>;
 };
+
+export interface ExecutionNode {
+  id: string;
+  executed: boolean;
+  type: string;
+  inputs: Record<string, any>;
+  outputs: Record<string, any>;
+  error?: any;
+  leadRecord?: any; // Add this to track lead records
+}

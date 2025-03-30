@@ -1,4 +1,6 @@
 import type { NodeDefinition, NodeProcessor } from "../types.js";
+import { db } from "../../db/index.js";
+import { httpResponses } from "../../db/schema.js";
 
 export const definition: NodeDefinition = {
   id: "http_response",
@@ -39,22 +41,44 @@ export const definition: NodeDefinition = {
       type: "json",
       description: "URL path parameters",
     },
+    {
+      id: "message",
+      label: "Message Data",
+      type: "json",
+      description: "Additional message data",
+    },
   ],
 };
 
 export const processor: NodeProcessor = {
   async process(inputs, context) {
-    // The inputs will contain the HTTP request data passed from the workflow trigger
-    const { body, query, headers, method, params } = inputs;
+    const { body, query, headers, method, params, message } = inputs;
 
     context.logger.info(`Processing HTTP request: ${method} with ${Object.keys(inputs).length} inputs`);
 
-    return {
-      body, // Changed to just pass body directly
+    // Save HTTP response data
+    await db.insert(httpResponses).values({
+      workflowId: context.workflowId,
+      executionId: context.executionId,
+      nodeId: context.nodeId,
+      body: body || {},
       query: query || {},
       headers: headers || {},
       method: method || 'GET',
       params: params || {},
+      leadId: inputs.leadId,
+    });
+
+    // We want the message data to be accessible via the 'output' handle
+    return {
+      output: {
+        message: message || {},
+        body: body || {},
+        query: query || {},
+        headers: headers || {},
+        method: method || 'GET',
+        params: params || {},
+      }
     };
   },
 };

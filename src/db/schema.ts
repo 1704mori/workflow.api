@@ -6,6 +6,7 @@ import {
   varchar,
   jsonb,
   boolean,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 
@@ -86,3 +87,69 @@ export const assets = pgTable("assets", {
   url: varchar("url", { length: 1000 }).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
+
+export const leads = pgTable(
+  "leads",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workflowId: uuid("workflow_id")
+      .notNull()
+      .references(() => workflows.id),
+    executionId: uuid("execution_id")
+      .notNull()
+      .references(() => workflowExecutions.id),
+    nodeId: varchar("node_id", { length: 255 }).notNull(),
+    leadId: varchar("lead_id", { length: 255 }).notNull(), // Primary key field for lead tracking
+    status: varchar("status", { length: 50 }).notNull(), // 'pending', 'processing', 'completed', 'failed'
+    data: jsonb("data"), // Store lead data at this stage
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    leadNodeIdx: uniqueIndex("lead_node_idx").on(
+      table.leadId,
+      table.nodeId,
+      table.executionId
+    ),
+  })
+);
+
+export const leadsRelations = relations(leads, ({ one }) => ({
+  workflow: one(workflows, {
+    fields: [leads.workflowId],
+    references: [workflows.id],
+  }),
+  execution: one(workflowExecutions, {
+    fields: [leads.executionId],
+    references: [workflowExecutions.id],
+  }),
+}));
+
+export const httpResponses = pgTable("http_responses", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  workflowId: uuid("workflow_id")
+    .notNull()
+    .references(() => workflows.id),
+  executionId: uuid("execution_id")
+    .notNull()
+    .references(() => workflowExecutions.id),
+  nodeId: varchar("node_id", { length: 255 }).notNull(),
+  body: jsonb("body"),
+  query: jsonb("query"),
+  headers: jsonb("headers"),
+  method: varchar("method", { length: 10 }),
+  params: jsonb("params"),
+  leadId: varchar("lead_id", { length: 255 }),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const httpResponsesRelations = relations(httpResponses, ({ one }) => ({
+  workflow: one(workflows, {
+    fields: [httpResponses.workflowId],
+    references: [workflows.id],
+  }),
+  execution: one(workflowExecutions, {
+    fields: [httpResponses.executionId],
+    references: [workflowExecutions.id],
+  }),
+}));

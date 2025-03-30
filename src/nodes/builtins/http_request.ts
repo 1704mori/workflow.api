@@ -1,4 +1,5 @@
 import type { NodeDefinition, NodeProcessor } from "../types.js";
+import { interpolateValue } from "../utils.js";
 
 export const definition: NodeDefinition = {
   id: "http_request",
@@ -56,6 +57,12 @@ export const definition: NodeDefinition = {
       type: "json",
       description: "HTTP response headers",
     },
+    {
+      id: "message",
+      label: "Message Data",
+      type: "json",
+      description: "Preserved message data",
+    },
   ],
 };
 
@@ -63,19 +70,32 @@ export const processor: NodeProcessor = {
   async process(inputs, context) {
     const { method, url, headers, body } = inputs;
     
-    context.logger.info(`Making HTTP ${method} request to ${url}`);
-    console.log("body", body)
+    // Get message data directly from context inputs
+    const messageData = context.inputs.message || {};
+    
+    context.logger.info(`Processing with message data: ${JSON.stringify(messageData)}`);
+    
+    // Interpolate values in the request configuration
+    const interpolatedBody = interpolateValue(body, messageData);
+    const interpolatedUrl = interpolateValue(url, messageData);
+    const interpolatedHeaders = interpolateValue(headers, messageData);
+    
+    context.logger.info(`Making HTTP ${method} request to ${interpolatedUrl}`);
+    context.logger.info(`With body: ${JSON.stringify(interpolatedBody)}`);
 
     try {
-      const requestHeaders = { ...headers };
+      const requestHeaders = {
+        'Content-Type': 'application/json',
+        ...interpolatedHeaders
+      };
       let requestBody: any = undefined;
 
       // Only stringify body if it exists and the method isn't GET
-      if (body && method !== 'GET') {
-        requestBody = JSON.stringify(body);
+      if (interpolatedBody && method !== 'GET') {
+        requestBody = JSON.stringify(interpolatedBody);
       }
 
-      const response = await fetch(url, {
+      const response = await fetch(interpolatedUrl, {
         method,
         headers: requestHeaders,
         body: requestBody,
@@ -89,10 +109,12 @@ export const processor: NodeProcessor = {
         responseData = await response.text();
       }
 
+      // Pass through message data in outputs
       return {
         response: responseData,
         status: response.status,
         headers: Object.fromEntries(response.headers.entries()),
+        message: messageData // Preserve message data
       };
     } catch (error: any) {
       context.logger.error("HTTP request failed", error);

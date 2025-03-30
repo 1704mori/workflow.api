@@ -119,10 +119,21 @@ app.delete("/:id", async (c) => {
   }
 });
 
+// example:
+// curl -X POST localhost:3000/workflows/6ad17e02-2309-4145-b441-f83a988cc100/trigger -H 'Content-Type: application/json' -H "Authorization: Bearer $MGFY_AUTH_TOKEN" -d '{"someKey": "someValue123", "lead": {"leadId": "123", "name": "test lead", "source": "local"}}' | jq
 app.post("/:id/trigger", async (c) => {
   try {
     const userId = c.get<any>("userId");
     const workflowId = c.req.param("id");
+    const requestBody = await c.req.json();
+
+    // Extract lead and message data
+    const leadData = requestBody.lead;
+    const messageData = requestBody.message || {};
+
+    if (!leadData || !leadData.leadId) {
+      return c.json({ error: "lead.leadId is required in the request body" }, 400);
+    }
 
     // Fetch workflow
     const [workflow] = await db
@@ -134,29 +145,21 @@ app.post("/:id/trigger", async (c) => {
       return c.json({ error: "Workflow not found" }, 404);
     }
 
-    // Normalize workflow data before execution
     const normalizedFlowData = normalizeWorkflowData(workflow.flowData);
 
-    // Log the normalized flow data for debugging
-    console.log('Normalized flow data:', JSON.stringify(normalizedFlowData, null, 2));
-
-    // Get request data
-    const body = await c.req.json();
-    const query = Object.fromEntries(new URL(c.req.url).searchParams);
-    const headers = c.req.header(); //Object.fromEntries(c.req.header());
-    const method = c.req.method;
-    const params = c.req.param();
-
-    // Prepare initial inputs for the HTTP response node
+    // Prepare initial inputs with lead and message data in proper structure
     const initialInputs = {
-      body,
-      query,
-      headers,
-      method,
-      params,
+      body: requestBody,
+      query: Object.fromEntries(new URL(c.req.url).searchParams),
+      headers: c.req.header(),
+      method: c.req.method,
+      params: c.req.param(),
+      lead: leadData,
+      leadId: leadData.leadId,
+      message: messageData  // Add message data for interpolation
     };
 
-    // Execute workflow with normalized data
+    // Execute workflow
     const executionId = await flowEngine.executeWorkflow(
       workflowId,
       normalizedFlowData as any,
@@ -167,6 +170,7 @@ app.post("/:id/trigger", async (c) => {
       {
         message: "Workflow triggered successfully",
         executionId,
+        leadId: leadData.leadId,
       },
       200
     );
